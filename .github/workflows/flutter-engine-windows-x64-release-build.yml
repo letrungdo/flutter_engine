@@ -41,20 +41,16 @@ jobs:
           cd engine
           
           fetch flutter
-          git -C src/flutter checkout 3.27.0
-
-          $filePath = "src/flutter/shell/platform/windows/flutter_windows_engine.cc"
-          (Get-Content $filePath) -replace 'ClearCurrent', 'MakeCurrent' | Set-Content $filePath
-
-          $filePath = "src/flutter/fml/hex_codec.h"
-          (Get-Content $filePath | ForEach-Object { if ($_ -eq '#include <string_view>') {"#include <string>`n" + $_} else {$_}}) | Set-Content $filePath
-
-          git -C src/flutter status
+          git -C src/flutter remote rename origin upstream
+          cd src\flutter
+          git remote add canonical https://github.com/canonical/flutter-engine.git
+          git fetch canonical multi-win
+          git checkout canonical/multi-win
           
           gclient sync -D
           
           # Compiling the Flutter engine
-          cd src
+          cd ../
           python .\flutter\tools\gn --runtime-mode=release
           ninja -C .\out\host_release
           
