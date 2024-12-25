@@ -55,12 +55,12 @@ jobs:
           
           # Compiling the Flutter engine
           cd src
-          python .\flutter\tools\gn --runtime-mode=release
-          ninja -C .\out\host_release
+          python .\flutter\tools\gn --unoptimized --no-lto --runtime-mode=debug
+          ninja -C .\out\host_debug_unopt
           
           # Check and compress files
-          $outputPath = "${{ github.workspace }}\windows-x64-release.zip"
-          $filesToCompress = Get-ChildItem -Path .\out\host_release\flutter_windows.dll*
+          $outputPath = "${{ github.workspace }}\windows-x64-debug.zip"
+          $filesToCompress = Get-ChildItem -Path .\out\host_debug_unopt\flutter_windows.dll*
           if ($filesToCompress) {
             Compress-Archive -Path $filesToCompress -DestinationPath $outputPath
           } else {
@@ -72,7 +72,7 @@ jobs:
         uses: svenstaro/upload-release-action@2.9.0
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: windows-x64-release.zip
+          file: windows-x64-debug.zip
           tag: ${{ github.ref }}
           overwrite: true
-          body: "Flutter Engine Release"
+          body: "Flutter Engine Debug"
