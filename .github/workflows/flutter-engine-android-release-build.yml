@@ -1,0 +1,77 @@
+name: Build Flutter Engine
+
+on: workflow_dispatch
+
+jobs:
+  build-engine:
+    runs-on: macos-latest
+
+    steps:
+      - name: Install Depot Tools
+        uses: newkdev/setup-depot-tools@v1.0.1
+
+      - name: Set environment variables
+        run: |
+          echo "DEPOT_TOOLS_WIN_TOOLCHAIN=0" >> $env:GITHUB_ENV
+
+      - name: Fetch Flutter
+        run: |
+          mkdir engine
+          cd engine
+          
+          fetch flutter
+          git -C src/flutter remote rename origin upstream
+          git -C src/flutter remote add origin https://github.com/letrungdo/flutter_engine.git
+          git -C src/flutter checkout -b flutter_3.24.5
+          git -C src/flutter status
+          
+          gclient sync -D
+
+          # Compiling the Flutter engine
+          cd src
+          # Build for arm64 (arm64-v8a)
+          ./flutter/tools/gn --android --android-cpu arm64 --runtime-mode release
+          ninja -C out/android_release_arm64
+          
+          
+      - name: Archive build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-engine-artifacts
+          path: |
+            engine/src/out/android_release_arm64/libflutter.so
+            engine/src/out/android_release_arm64/flutter.jar
+            engine/src/out/android_release_arm64/icudtl.dat
+          retention-days: 7
+
+      - name: Check and compress files
+        run: |
+          output_path="${{ github.workspace }}/android-release.zip"
+          files_to_compress=(
+            "engine/src/out/android_release_arm64/libflutter.so"
+            "engine/src/out/android_release_arm64/flutter.jar"
+            "engine/src/out/android_release_arm64/icudtl.dat"
+          )
+          valid_files=()
+          for file in "${files_to_compress[@]}"; do
+            if [ -f "$file" ]; then
+              valid_files+=("$file")
+            else
+              echo "Warning: File $file not found"
+            fi
+          done
+          if [ ${#valid_files[@]} -gt 0 ]; then
+            zip -r "$output_path" "${valid_files[@]}"
+          else
+            echo "Error: No build output files found!"
+            exit 1
+          fi
+
+      - name: Upload files to a GitHub release
+        uses: svenstaro/upload-release-action@2.9.0
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: android-release.zip
+          tag: ${{ github.ref }}
+          overwrite: true
+          body: "Flutter Engine Release for Android"
