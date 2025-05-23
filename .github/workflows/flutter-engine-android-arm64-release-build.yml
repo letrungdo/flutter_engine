@@ -1,0 +1,65 @@
+name: Build Flutter Engine Android Arm64
+
+on: workflow_dispatch
+
+jobs:
+  build-engine:
+    runs-on: macos-latest
+
+    steps:
+      - name: Install Depot Tools
+        uses: newkdev/setup-depot-tools@v1.0.1
+
+      - name: Set environment variables
+        run: |
+          echo "DEPOT_TOOLS_WIN_TOOLCHAIN=0" >> $env:GITHUB_ENV
+
+      - name: Fetch Flutter
+        run: |
+          mkdir engine
+          cd engine
+          
+          fetch flutter
+          git -C src/flutter remote rename origin upstream
+          git -C src/flutter remote add origin https://github.com/letrungdo/flutter_engine.git
+          git -C src/flutter fetch origin
+          git -C src/flutter checkout origin/flutter_3.24.5
+          git -C src/flutter status
+          
+          gclient sync -D
+
+          # Compiling the Flutter engine
+          cd src
+          # Build for arm64 (arm64-v8a)
+          ./flutter/tools/gn --android --android-cpu arm64 --runtime-mode release
+          ninja -C out/android_release_arm64
+          
+          
+      - name: Archive build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-engine-artifacts
+          path: engine/src/out/
+          retention-days: 7
+
+      - name: Check and compress files
+        run: |
+          output_path="${{ github.workspace }}/android-release-arm64.zip"
+          output_dir="engine/src/out"
+          if [ -d "$output_dir" ] && [ "$(ls -A $output_dir)" ]; then
+            zip -r "$output_path" "$output_dir"
+            echo "Compressed $output_dir to $output_path"
+            ls -lh "$output_path"
+          else
+            echo "Error: Output directory $output_dir is empty or does not exist!"
+            exit 1
+          fi
+
+      - name: Upload files to a GitHub release
+        uses: svenstaro/upload-release-action@2.9.0
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: android-release-arm64.zip
+          tag: ${{ github.ref }}
+          overwrite: true
+          body: "Flutter Engine Release for Android"
